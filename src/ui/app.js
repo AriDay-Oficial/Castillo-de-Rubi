@@ -154,7 +154,9 @@ export function createApp({ doc = document, bus, storage }) {
       return;
     }
     const newest = getState().log[0];
-    if (ANNOUNCED.has(name) && newest !== before && typeof newest === "object") {
+    // En pantallas anchas la bitácora queda a la vista: repetirla en un aviso solo estorba.
+    const logInView = doc.defaultView.matchMedia?.("(min-width: 900px)").matches;
+    if (ANNOUNCED.has(name) && !logInView && newest !== before && typeof newest === "object") {
       toast(newest.text, TOAST_TONES[newest.kind] || "info");
     }
     scheduleRender();

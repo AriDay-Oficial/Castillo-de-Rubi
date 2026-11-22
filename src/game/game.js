@@ -128,7 +128,8 @@ export function createGame({ engine, bus, rng = Math.random }) {
     const state = get();
     const { plan } = getFloorStatus(state);
     const zone = getZoneForFloor(floor);
-    say(`Piso ${floor}: ${zone.name} (${zone.biome}). ${plan.event}`, "info");
+    const place = zone.name === `Piso ${floor}` ? zone.biome : `${zone.name} (${zone.biome})`;
+    say(`Piso ${floor}: ${place}. ${plan.event}`, "info");
     if (plan.safe && !state.progress.refuges.includes(floor)) {
       apply("updateProgress", { refuges: [...state.progress.refuges, floor] });
       say(`Refugio descubierto: desde Rubi ya puedes viajar al piso ${floor}.`, "good");
