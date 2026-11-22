@@ -169,3 +169,24 @@ test("el jefe avisa de su golpe devastador y defenderse lo amortigua", () => {
   assert.equal(guarded.energy, 1, "bloquearlo da energía");
   assert.equal(isBlastIncoming(open.combat), false);
 });
+
+test("los sucesos de la ronda dicen a quién afectan y cuánto, para animarlos", () => {
+  const combat = wolves(2);
+  const result = round(combat, { type: "attack" });
+  const strike = result.events.find((event) => event.target === 0);
+  const hurt = result.events.filter((event) => event.target === "you");
+
+  assert.equal(strike.amount, combat.enemies[0].hp - result.combat.enemies[0].hp);
+  assert.equal(strike.kill, false);
+  assert.equal(strike.crit, false);
+  assert.deepEqual(hurt.map((event) => event.source), [0, 1]);
+  assert.equal(hurt.reduce((sum, event) => sum + event.amount, 0), 200 - result.hp);
+
+  const lethal = round(wolves(2), { type: "attack" }, { stats: { ...STATS, attack: 5000 } });
+  assert.equal(lethal.events.find((event) => event.target === 0).kill, true);
+  assert.deepEqual(lethal.events.filter((event) => event.target === "you").map((event) => event.source), [1]);
+
+  const heal = round(wolves(1), { type: "skill", id: "aliento" }, { hp: 50 });
+  const healed = heal.events.find((event) => event.target === "you" && event.source === undefined);
+  assert.ok(healed.amount > 0);
+});

@@ -46,16 +46,17 @@ function dataAttributes(data) {
 
 /**
  * Botón de acción. `data` viaja como atributos data-* hasta el manejador;
- * `note` es el texto pequeño de la derecha (coste, cantidad…).
+ * `note` es el texto pequeño de la derecha (coste, cantidad…) e `icon`, el
+ * HTML de un sprite que acompaña a la etiqueta.
  */
-export function button(label, action, { data = {}, variant = "", disabled = false, note = "", title = "" } = {}) {
+export function button(label, action, { data = {}, variant = "", disabled = false, note = "", title = "", icon = "" } = {}) {
   const classes = ["btn", ...variant.split(" ").filter(Boolean).map((name) => `btn--${name}`)];
   return (
     `<button type="button" class="${classes.join(" ")}" data-action="${esc(action)}"` +
     dataAttributes(data) +
     (title ? ` title="${esc(title)}"` : "") +
     (disabled ? " disabled" : "") +
-    `><span class="btn__label">${esc(label)}</span>` +
+    `><span class="btn__label">${icon}${esc(label)}</span>` +
     (note ? `<span class="btn__note">${esc(note)}</span>` : "") +
     "</button>"
   );

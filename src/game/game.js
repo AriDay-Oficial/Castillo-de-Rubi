@@ -84,11 +84,11 @@ export function createGame({ engine, bus, rng = Math.random }) {
             items: addItem(state.inventory.items, current.id, { level: current.level }),
           });
         }
-        return { label, equipped: true };
+        return { id, label, equipped: true };
       }
     }
     apply("updateInventory", { items: addItem(state.inventory.items, id, { level }) });
-    return { label, equipped: false };
+    return { id, label, equipped: false };
   }
 
   function gainXp(amount) {
@@ -416,7 +416,13 @@ export function createGame({ engine, bus, rng = Math.random }) {
         finishDefeat(result.combat);
       }
     });
-    bus.emit("combat:round", { events: result.events, outcome: result.outcome });
+    bus.emit("combat:round", {
+      events: result.events,
+      outcome: result.outcome,
+      combat: result.combat,
+      hp: result.hp,
+      energy: result.energy,
+    });
     return { ok: true, outcome: result.outcome, events: result.events };
   }
 

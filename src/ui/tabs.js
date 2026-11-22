@@ -3,6 +3,7 @@ import { BALANCE, getPlayerStats, xpToNext } from "../game/rules.js";
 import { getFloorStatus, isInCity } from "../game/selectors.js";
 import { getRank, openRanks, SKILL_GROUPS, SKILL_MAX_RANK, SKILLS } from "../game/skills.js";
 import { button, esc, meter, num, timeAgo } from "./html.js";
+import { itemSprite } from "./sprites.js";
 
 export function inventoryScreen(state) {
   const { inventory, equipment, combat } = state;
@@ -19,7 +20,7 @@ export function inventoryScreen(state) {
     }
     const item = getItem(piece.id);
     return (
-      `<li class="row"><div class="row__text"><strong>${esc(itemLabel(item, piece.level))}</strong>` +
+      `<li class="row">${itemSprite(item.id)}<div class="row__text"><strong>${esc(itemLabel(item, piece.level))}</strong>` +
       `<small>${esc(slot.name)} · ${esc(RARITY_NAMES[item.rarity])} · ${esc(describeItem(item, piece.level))}</small></div>` +
       `<div class="row__actions">` +
       (core
@@ -56,7 +57,7 @@ export function inventoryScreen(state) {
         });
       }
       return (
-        `<li class="row"><div class="row__text"><strong>${esc(itemLabel(item, entry.level))} <span class="qty">×${entry.qty}</span></strong>` +
+        `<li class="row">${itemSprite(item.id)}<div class="row__text"><strong>${esc(itemLabel(item, entry.level))} <span class="qty">×${entry.qty}</span></strong>` +
         `<small>${esc(RARITY_NAMES[item.rarity])} · ${esc(describeItem(item, entry.level, stats.healBonus))}` +
         (item.kind === "upgrade" ? " Úsalo desde una pieza equipada." : "") +
         `</small></div>${action}</li>`
