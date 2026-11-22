@@ -1,7 +1,7 @@
 export const BOSSES = [
   {
     id: "guardian-del-bosque",
-    name: "Guardian del bosque",
+    name: "Guardián del bosque",
     floor: 10,
     power: 28,
   },
@@ -13,13 +13,13 @@ export const BOSSES = [
   },
   {
     id: "senor-de-cenizas",
-    name: "Senor de cenizas",
+    name: "Señor de cenizas",
     floor: 50,
     power: 65,
   },
   {
     id: "titan-raids",
-    name: "Titan de la grieta",
+    name: "Titán de la grieta",
     floor: 75,
     power: 90,
   },
