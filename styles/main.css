@@ -1110,12 +1110,17 @@ kbd {
 
 .notice--levelup .notice__level {
   font-weight: 600;
-  background: linear-gradient(90deg, var(--good) 0%, #d9ffe9 45%, var(--good) 90%);
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: shimmer 1.6s linear 2;
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .notice--levelup .notice__level {
+    background: linear-gradient(90deg, var(--good) 0%, #f2fff7 45%, var(--good) 90%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 1.4s linear 2;
+  }
 }
 
 .notice--boss {
@@ -1150,7 +1155,7 @@ kbd {
 }
 
 .panel--screen.is-entering > * {
-  animation: screen-in 0.24s ease both;
+  animation: screen-in 0.2s ease-out both;
 }
 
 /* Enfriamiento de los botones */
@@ -1296,7 +1301,7 @@ kbd {
 
 @keyframes screen-in {
   from {
-    opacity: 0;
+    opacity: 0.35;
     translate: 0 6px;
   }
   to {
