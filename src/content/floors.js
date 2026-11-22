@@ -1,3 +1,6 @@
+export const CITY_FLOOR = 0;
+export const MAX_FLOOR = 100;
+
 export const SAFE_FLOORS = new Set([11, 21, 31, 41, 51, 61, 71, 81, 91]);
 
 export const FLOOR_ZONES = [
@@ -18,7 +21,7 @@ export const FLOOR_ZONES = [
   {
     id: "transicion",
     range: [11, 25],
-    name: "Transicion",
+    name: "Transición",
     biome: "Bosques densos",
     difficulty: "media",
   },
@@ -67,4 +70,8 @@ export function getZoneForFloor(floor) {
 
 export function isSafeFloor(floor) {
   return SAFE_FLOORS.has(floor);
+}
+
+export function isCityFloor(floor) {
+  return floor === CITY_FLOOR;
 }

@@ -2,9 +2,17 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0c10" />
+    <meta
+      name="description"
+      content="El castillo de Rubi: un RPG de texto para navegador. Sube los 100 pisos del castillo, vence a sus jefes y vuelve a la ciudad a mejorar tu equipo."
+    />
     <title>El castillo de Rubi</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0c10'/%3E%3Cpath d='M7 26V12h3V8h3v4h6V8h3v4h3v14h-7v-6h-4v6z' fill='%23d54b4b'/%3E%3C/svg%3E"
+    />
     <link rel="stylesheet" href="./styles/main.css" />
   </head>
   <body>
@@ -22,37 +30,45 @@
       </header>
 
       <main class="app__main">
-        <section class="panel" id="screen">
+        <section class="panel panel--screen" id="screen">
           <h2>Bienvenido</h2>
           <p>
             Elige comenzar una nueva
             partida o continuar tu progreso.
           </p>
           <div class="panel__actions">
-            <button class="btn btn--primary" id="newGameBtn">
+            <button class="btn btn--primary" id="newGameBtn" disabled>
               Nueva partida
             </button>
-            <button class="btn btn--ghost" id="continueBtn">
+            <button class="btn btn--ghost" id="continueBtn" disabled>
               Continuar
             </button>
           </div>
+          <noscript>
+            <p class="hint hint--warn">
+              El juego necesita JavaScript para funcionar. Actívalo y recarga la página.
+            </p>
+          </noscript>
         </section>
 
-        <section class="panel panel--scroll" id="log">
-          <h3>Bitacora</h3>
+        <section class="panel panel--scroll" id="log" aria-label="Bitácora">
+          <h3>Bitácora</h3>
           <ul class="log" id="logList">
             <li>El castillo aguarda...</li>
           </ul>
         </section>
       </main>
 
-      <footer class="app__footer">
+      <nav class="app__footer" aria-label="Secciones">
         <button class="tab tab--active" data-tab="explore">Explorar</button>
         <button class="tab" data-tab="inventory">Inventario</button>
         <button class="tab" data-tab="skills">Habilidades</button>
         <button class="tab" data-tab="settings">Ajustes</button>
-      </footer>
+      </nav>
     </div>
+
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+    <div class="modal" id="modal" hidden></div>
 
     <script type="module" src="./src/main.js"></script>
   </body>
