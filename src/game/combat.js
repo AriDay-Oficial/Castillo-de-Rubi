@@ -98,7 +98,8 @@ export function resolveRound({ combat, hp, energy, stats, skills, action, rng })
   const enemies = combat.enemies.map((enemy) => ({ ...enemy }));
   const alive = () => enemies.filter((enemy) => enemy.hp > 0);
   const events = [];
-  const say = (text, tone = "info") => events.push({ text, tone });
+  // `fx` describe el golpe para la interfaz: a quién afecta, cuánto y de quién viene.
+  const say = (text, tone = "info", fx = null) => events.push(fx ? { text, tone, ...fx } : { text, tone });
   let bossStep = combat.bossStep;
   let defending = false;
   let kills = 0;
@@ -124,7 +125,8 @@ export function resolveRound({ combat, hp, energy, stats, skills, action, rng })
     target.hp = Math.max(0, target.hp - damage);
     say(
       `${verb} a ${target.name}: ${damage} de daño${crit ? " (¡crítico!)" : ""}.`,
-      crit ? "crit" : "hit"
+      crit ? "crit" : "hit",
+      { target: enemies.indexOf(target), amount: damage, crit, kill: target.hp === 0 }
     );
     if (target.hp === 0) {
       kills += 1;
@@ -157,7 +159,7 @@ export function resolveRound({ combat, hp, energy, stats, skills, action, rng })
         const healed = Math.min(stats.maxHp - hp, Math.round(stats.maxHp * effect.heal));
         hp += healed;
         energy -= skill.cost;
-        say(`Segundo aliento: recuperas ${healed} de salud.`, "heal");
+        say(`Segundo aliento: recuperas ${healed} de salud.`, "heal", { target: "you", amount: healed });
       } else {
         // Se paga antes de golpear para que la energía de las bajas no se pierda por el tope.
         energy -= skill.cost;
@@ -175,7 +177,7 @@ export function resolveRound({ combat, hp, energy, stats, skills, action, rng })
       }
       const healed = Math.min(stats.maxHp - hp, action.heal);
       hp += healed;
-      say(`Usas ${action.name}: recuperas ${healed} de salud.`, "heal");
+      say(`Usas ${action.name}: recuperas ${healed} de salud.`, "heal", { target: "you", amount: healed });
       break;
     }
     case "flee":
@@ -197,13 +199,14 @@ export function resolveRound({ combat, hp, energy, stats, skills, action, rng })
   }
 
   for (const enemy of alive()) {
+    const source = enemies.indexOf(enemy);
     let multiplier = 1;
     let blast = false;
     if (combat.kind === "boss") {
       const step = nextBossStep({ bossStep });
       bossStep += 1;
       if (step === "charge") {
-        say(`${enemy.name} toma impulso: prepara un golpe devastador.`, "warn");
+        say(`${enemy.name} toma impulso: prepara un golpe devastador.`, "warn", { source });
         continue;
       }
       if (step === "blast") {
@@ -212,7 +215,7 @@ export function resolveRound({ combat, hp, energy, stats, skills, action, rng })
       }
     }
     if (!blast && rng() < BALANCE.enemy.missChance) {
-      say(`${enemy.name} falla su ataque.`, "miss");
+      say(`${enemy.name} falla su ataque.`, "miss", { source });
       continue;
     }
     if (defending) {
@@ -223,7 +226,8 @@ export function resolveRound({ combat, hp, energy, stats, skills, action, rng })
     const how = blast ? "descarga su golpe devastador" : "te ataca";
     say(
       `${enemy.name} ${how}: ${damage} de daño${defending ? " (bloqueado en parte)" : ""}.`,
-      "hurt"
+      "hurt",
+      { target: "you", source, amount: damage, blast, blocked: defending }
     );
     if (blast && defending && hp > 0) {
       energy = Math.min(BALANCE.maxEnergy, energy + 1);

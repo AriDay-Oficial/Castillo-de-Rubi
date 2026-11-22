@@ -20,6 +20,7 @@ import {
 } from "../game/selectors.js";
 import { getEffect, getRank, isTechnique, SKILLS } from "../game/skills.js";
 import { button, esc, meter, num, pips, timeAgo } from "./html.js";
+import { enemySprite, heroSprite, itemSprite, spriteSvg } from "./sprites.js";
 
 const EVENT_HINTS = {
   mercader: "Puedes comerciar con él mientras sigas en este piso.",
@@ -49,13 +50,17 @@ function noticeHtml(notice) {
   }
   if (notice.type === "victory") {
     const loot = notice.loot
-      .map((drop) => `${esc(drop.label)}${drop.equipped ? " <em>(equipado)</em>" : ""}`)
-      .join(", ");
+      .map(
+        (drop) =>
+          `<span class="loot">${itemSprite(drop.id)}${esc(drop.label)}${drop.equipped ? " <em>(equipado)</em>" : ""}</span>`
+      )
+      .join(" ");
+    const classes = `notice notice--good${notice.boss ? " notice--boss" : ""}${notice.levels ? " notice--levelup" : ""}`;
     return (
-      `<div class="notice notice--good" role="status">` +
+      `<div class="${classes}" role="status">` +
       `<strong>Victoria contra ${esc(notice.title)}</strong>` +
       `<span>+${num(notice.xp)} de experiencia · +${num(notice.gold)} de oro</span>` +
-      (loot ? `<span>Botín: ${loot}</span>` : "") +
+      (loot ? `<span class="notice__loot">Botín: ${loot}</span>` : "") +
       (notice.levels ? `<span class="notice__level">¡Subes de nivel! Tienes puntos de habilidad por gastar.</span>` : "") +
       "</div>"
     );
@@ -72,6 +77,7 @@ function healButtons(state, action) {
         data: action === "act" ? { type: "item", key: entryKey(entry) } : { key: entryKey(entry) },
         note: `+${num(healAmount(item, stats))} salud · ×${entry.qty}`,
         disabled: full,
+        icon: itemSprite(item.id),
       })
     )
     .join("");
@@ -222,7 +228,7 @@ export function shopScreen(state) {
     .map(({ item, price }) => {
       const owned = items.filter((entry) => entry.id === item.id).reduce((total, entry) => total + entry.qty, 0);
       return (
-        `<li class="row"><div class="row__text"><strong>${esc(item.name)}</strong>` +
+        `<li class="row">${itemSprite(item.id)}<div class="row__text"><strong>${esc(item.name)}</strong>` +
         `<small>${esc(describeItem(item, 0, stats.healBonus))} Tienes ${owned}.</small></div>` +
         button("Comprar", "buy", { data: { id: item.id }, note: `${num(price)} de oro`, disabled: gold < price, variant: "small" }) +
         `</li>`
@@ -234,7 +240,7 @@ export function shopScreen(state) {
       const item = getItem(entry.id);
       const price = sellPrice(item, entry.level, state.player.level, stats.goldBonus);
       return (
-        `<li class="row"><div class="row__text"><strong>${esc(itemLabel(item, entry.level))} <span class="qty">×${entry.qty}</span></strong>` +
+        `<li class="row">${itemSprite(item.id)}<div class="row__text"><strong>${esc(itemLabel(item, entry.level))} <span class="qty">×${entry.qty}</span></strong>` +
         `<small>${esc(describeItem(item, entry.level, stats.healBonus))}</small></div>` +
         button("Vender", "sell", { data: { key: entryKey(entry) }, note: `+${num(price)} de oro`, variant: "small" }) +
         `</li>`
@@ -287,7 +293,8 @@ export function forgeScreen(state) {
           `<strong>${esc(option.slot.name)}: vacío</strong>` +
           `<small>${option.item ? "Ya llevas una pieza en la mochila: equípala desde el inventario." : "Esta pieza solo se consigue venciendo a un jefe."}</small>`;
       }
-      return `<li class="row"><div class="row__text">${text}</div>${action}</li>`;
+      const icon = option.item ? itemSprite(option.item.id, { className: option.piece ? "" : "sprite--ghost" }) : "";
+      return `<li class="row">${icon}<div class="row__text">${text}</div>${action}</li>`;
     })
     .join("");
 
@@ -331,7 +338,11 @@ export function floorScreen(state, ui) {
     const preview = createBossCombat({ boss: status.boss, floor: status.floor, difficulty: zone.difficulty });
     const danger = estimateDanger(getPlayerStats(state), state.player.hp, preview.enemies, true);
     primary.push(
-      button(`Desafiar a ${status.boss.name}`, "boss", { variant: "primary", note: `peligro: ${danger.name.toLowerCase()}` })
+      button(`Desafiar a ${status.boss.name}`, "boss", {
+        variant: "primary",
+        note: `peligro: ${danger.name.toLowerCase()}`,
+        icon: spriteSvg(status.boss.id, { size: 32 }),
+      })
     );
   } else if (status.canAscend) {
     primary.push(button(`Subir al piso ${status.floor + 1}`, "ascend", { variant: "primary" }));
@@ -368,6 +379,7 @@ export function floorScreen(state, ui) {
         data: { mode: "rope" },
         note: ropes > 0 ? `conservas este piso · ×${ropes}` : "no tienes cuerdas",
         disabled: ropes === 0,
+        icon: itemSprite("cuerda"),
       })
     );
     secondary.push(button("Retirarse a Rubi", "return", { data: { mode: "retreat" }, note: "pierdes la posición", variant: "ghost" }));
@@ -391,15 +403,29 @@ export function floorScreen(state, ui) {
   );
 }
 
-function enemyHtml(enemy, index, isTarget) {
+function enemyHtml(enemy, index, isTarget, { boss, charging }) {
   const dead = enemy.hp <= 0;
   const traits = enemy.tags
     .map((tag) => TAG_TRAITS[tag])
     .filter(Boolean)
     .map((trait) => `<span class="chip" title="${esc(trait.hint)}">${esc(trait.name)}</span>`)
     .join("");
+  const classes = ["enemy"];
+  if (dead) {
+    classes.push("enemy--dead");
+  } else if (charging) {
+    classes.push("enemy--charging");
+  }
+  if (isTarget) {
+    classes.push("enemy--target");
+  }
+  if (boss) {
+    classes.push("enemy--boss");
+  }
   return (
-    `<li class="enemy${dead ? " enemy--dead" : ""}${isTarget ? " enemy--target" : ""}" data-enemy="${index}" data-hp="${enemy.hp}">` +
+    `<li class="${classes.join(" ")}" data-enemy="${index}" data-hp="${enemy.hp}" style="--i:${index}">` +
+    `<span class="enemy__sprite">${enemySprite(enemy, { size: boss ? 64 : 48 })}</span>` +
+    `<div class="enemy__body">` +
     `<div class="enemy__head"><strong>${esc(enemy.name)}</strong>${traits}` +
     (isTarget ? `<span class="chip chip--target">Objetivo</span>` : "") +
     `</div>` +
@@ -409,17 +435,21 @@ function enemyHtml(enemy, index, isTarget) {
         ? "Derrotado"
         : `<span class="enemy__word">Salud </span>${num(enemy.hp)}/${num(enemy.maxHp)} · Ataque ${num(enemy.attack)}`
     }</small>` +
-    `</li>`
+    `</div></li>`
   );
 }
 
-export function combatScreen(state) {
+/**
+ * Pantalla de combate. `outro` ("victory" o "defeat") la pinta sin acciones
+ * durante el instante en que se ve el último golpe.
+ */
+export function combatScreen(state, { outro = "" } = {}) {
   const { combat, player, skills } = state;
   const stats = getPlayerStats(state);
   const isBoss = combat.kind === "boss";
   const danger = estimateDanger(stats, player.hp, combat.enemies, isBoss);
   const targetIndex = combat.enemies.findIndex((enemy) => enemy.hp > 0);
-  const blast = isBlastIncoming(combat);
+  const blast = !outro && isBlastIncoming(combat);
 
   const techniques = SKILLS.filter((skill) => isTechnique(skill) && getRank(skills, skill.id) > 0)
     .map((skill) => {
@@ -444,17 +474,21 @@ export function combatScreen(state) {
   return (
     `<p class="eyebrow">Combate · piso ${combat.floor} · ronda ${combat.round}</p>` +
     `<h2>${esc(combat.title)} ${dangerTag(danger)}</h2>` +
-    `<ul class="enemies">${combat.enemies.map((enemy, index) => enemyHtml(enemy, index, index === targetIndex)).join("")}</ul>` +
+    `<ul class="enemies">${combat.enemies
+      .map((enemy, index) => enemyHtml(enemy, index, index === targetIndex, { boss: isBoss, charging: blast }))
+      .join("")}</ul>` +
     (blast
       ? `<div class="notice notice--warn" role="alert"><strong>Golpe devastador inminente.</strong><span>Defiéndete esta ronda para bloquear gran parte del daño y ganar energía.</span></div>`
       : "") +
     `<ul class="feed" aria-live="polite">${feed}</ul>` +
-    `<div class="you" data-hp="${player.hp}">` +
+    `<div class="you${player.hp <= 0 ? " you--down" : ""}" data-hp="${player.hp}">` +
+    `<span class="you__sprite">${heroSprite({ size: 48 })}</span>` +
+    `<div class="you__body">` +
     `<div class="you__line"><strong>${esc(player.name)}</strong><span>Salud ${num(player.hp)}/${num(player.maxHp)}</span></div>` +
     meter("player-hp", player.hp, player.maxHp, "hp", "Tu salud") +
     `<div class="you__line"><span>Energía ${player.energy}/${BALANCE.maxEnergy}</span>${pips(player.energy, BALANCE.maxEnergy, "energy")}</div>` +
-    `</div>` +
-    `<div class="actions actions--combat" data-hotkeys>` +
+    `</div></div>` +
+    `<div class="actions actions--combat${blast ? " actions--alert" : ""}" data-hotkeys${outro ? " inert" : ""}>` +
     button("Atacar", "act", { data: { type: "attack" }, variant: blast ? "" : "primary", note: "golpe básico" }) +
     button("Defender", "act", {
       data: { type: "defend" },

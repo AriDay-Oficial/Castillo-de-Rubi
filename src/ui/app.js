@@ -4,6 +4,7 @@ import { exportSave, importSave } from "../core/storage.js";
 import { createGame } from "../game/game.js";
 import { BALANCE, xpToNext } from "../game/rules.js";
 import { getShop, isInCity } from "../game/selectors.js";
+import { COOLDOWN, createCooldowns } from "./cooldowns.js";
 import { esc, meter, num, percent } from "./html.js";
 import {
   cityScreen,
@@ -24,6 +25,35 @@ const TOAST_TONES = { good: "good", bad: "bad", loot: "good" };
 // bitácora queda fuera de la vista.
 const ANNOUNCED = new Set(["rest", "pray", "buy", "sell", "forge", "equip", "unequip", "use", "learn", "return"]);
 
+// Ritmo de los efectos de una ronda: primero golpea el jugador y después,
+// escalonados, los enemigos.
+const FX = { strikeStep: 90, enemyStart: 280, enemyStep: 150, goldMs: 500 };
+const SHAKE = [
+  { transform: "translateX(0)", filter: "brightness(1.7)" },
+  { transform: "translateX(-4px)", offset: 0.3 },
+  { transform: "translateX(3px)", offset: 0.6 },
+  { transform: "translateX(0)", filter: "none" },
+];
+const FALLEN = "rotate(-90deg) translateX(-3px)";
+
+/** Momento, en milisegundos desde el inicio de la ronda, en que se ve cada suceso. */
+export function planRound(events) {
+  let playerAt = 0;
+  let enemyAt = FX.enemyStart;
+  return events.map((event) => {
+    if (event.source !== undefined) {
+      const at = enemyAt;
+      enemyAt += FX.enemyStep;
+      return at;
+    }
+    const at = playerAt;
+    if (typeof event.target === "number") {
+      playerAt += FX.strikeStep;
+    }
+    return at;
+  });
+}
+
 export function createApp({ doc = document, bus, storage }) {
   const els = {
     app: doc.getElementById("app"),
@@ -35,13 +65,26 @@ export function createApp({ doc = document, bus, storage }) {
     tabs: [...doc.querySelectorAll("[data-tab]")],
   };
 
+  const win = doc.defaultView;
+  const now = () => win.performance.now();
+  const motionOk = () => !win.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const cooldowns = createCooldowns(now);
+
   let session = null;
   let saved = storage.load();
   let renderQueued = false;
   let lastScreen = null;
+  let lastNav = null;
   let saveWarned = false;
   let meterValues = new Map();
-  let hpValues = new Map();
+  let shownState = null;
+  let statusHtml = null;
+  let statusSeen = null;
+  let goldShown = null;
+  let goldFrame = 0;
+  let logSeen = null;
+  let cooldownTimer = 0;
+  let outroTimer = 0;
   const ui = {
     tab: "explore",
     screen: "title",
@@ -51,6 +94,8 @@ export function createApp({ doc = document, bus, storage }) {
     transfer: null,
     savedAt: null,
     message: null,
+    outro: null,
+    fx: null,
   };
 
   const getState = () => (session ? session.engine.getState() : null);
@@ -88,7 +133,20 @@ export function createApp({ doc = document, bus, storage }) {
     }
   }
 
+  function resetEffects() {
+    win.clearTimeout(outroTimer);
+    win.cancelAnimationFrame(goldFrame);
+    cooldowns.clear();
+    Object.assign(ui, { outro: null, fx: null });
+    shownState = null;
+    statusSeen = null;
+    goldShown = null;
+    logSeen = null;
+    meterValues = new Map();
+  }
+
   function openSession(state, { fresh = false } = {}) {
+    resetEffects();
     const engine = createEngine(state, bus);
     const game = createGame({ engine, bus });
     session = { engine, game };
@@ -101,6 +159,7 @@ export function createApp({ doc = document, bus, storage }) {
   }
 
   function closeSession() {
+    resetEffects();
     session = null;
     saved = storage.load();
     Object.assign(ui, { tab: "explore", screen: "title", view: "", notice: null, transfer: null });
@@ -144,7 +203,7 @@ export function createApp({ doc = document, bus, storage }) {
 
   // --- Acciones de la interfaz ---
 
-  function play(name, call) {
+  function play(name, call, data) {
     const before = getState().log[0];
     ui.notice = name === "learn" || name === "equip" || name === "unequip" ? ui.notice : null;
     const result = call(session.game);
@@ -153,6 +212,7 @@ export function createApp({ doc = document, bus, storage }) {
       scheduleRender();
       return;
     }
+    cooldowns.press(data);
     const newest = getState().log[0];
     // En pantallas anchas la bitácora queda a la vista: repetirla en un aviso solo estorba.
     const logInView = doc.defaultView.matchMedia?.("(min-width: 900px)").matches;
@@ -181,24 +241,25 @@ export function createApp({ doc = document, bus, storage }) {
     view: ({ view }) => {
       ui.view = view || "";
     },
-    enter: ({ id }) => play("enter", (game) => game.enterCastle(id)),
-    explore: () => play("explore", (game) => game.explore()),
-    boss: () => play("boss", (game) => game.challengeBoss()),
-    ascend: () => play("ascend", (game) => game.ascend()),
-    act: ({ type, id, key }) => play("act", (game) => game.act({ type, id, key })),
-    rest: ({ kind }) => play("rest", (game) => game.rest(kind)),
-    pray: () => play("pray", (game) => game.pray()),
-    buy: ({ id }) => play("buy", (game) => game.buy(id)),
-    sell: ({ key }) => play("sell", (game) => game.sell(key)),
-    forge: ({ slot }) => play("forge", (game) => game.forge(slot)),
-    equip: ({ key }) => play("equip", (game) => game.equip(key)),
-    unequip: ({ slot }) => play("unequip", (game) => game.unequip(slot)),
-    use: ({ key, slot }) => play("use", (game) => game.useItem(key, slot)),
-    learn: ({ id }) => play("learn", (game) => game.learnSkill(id)),
-    return: ({ mode }) => {
+    enter: (data) => play("enter", (game) => game.enterCastle(data.id), data),
+    explore: (data) => play("explore", (game) => game.explore(), data),
+    boss: (data) => play("boss", (game) => game.challengeBoss(), data),
+    ascend: (data) => play("ascend", (game) => game.ascend(), data),
+    act: (data) => play("act", (game) => game.act({ type: data.type, id: data.id, key: data.key }), data),
+    rest: (data) => play("rest", (game) => game.rest(data.kind), data),
+    pray: (data) => play("pray", (game) => game.pray(), data),
+    buy: (data) => play("buy", (game) => game.buy(data.id), data),
+    sell: (data) => play("sell", (game) => game.sell(data.key), data),
+    forge: (data) => play("forge", (game) => game.forge(data.slot), data),
+    equip: (data) => play("equip", (game) => game.equip(data.key), data),
+    unequip: (data) => play("unequip", (game) => game.unequip(data.slot), data),
+    use: (data) => play("use", (game) => game.useItem(data.key, data.slot), data),
+    learn: (data) => play("learn", (game) => game.learnSkill(data.id), data),
+    return: (data) => {
+      const { mode } = data;
       const go = () => {
         ui.tab = "explore";
-        play("return", (game) => game.returnToCity(mode));
+        play("return", (game) => game.returnToCity(mode), data);
       };
       if (mode === "retreat") {
         ask(
@@ -210,8 +271,8 @@ export function createApp({ doc = document, bus, storage }) {
         go();
       }
     },
-    "ack-defeat": () => play("ack", (game) => game.acknowledge("defeat")),
-    "ack-victory": () => play("ack", (game) => game.acknowledge("victoryPending")),
+    "ack-defeat": (data) => play("ack", (game) => game.acknowledge("defeat"), data),
+    "ack-victory": (data) => play("ack", (game) => game.acknowledge("victoryPending"), data),
     save: () => {
       persist();
       toast("Partida guardada.", "good");
@@ -281,6 +342,9 @@ export function createApp({ doc = document, bus, storage }) {
     if (ui.tab === "skills") {
       return ["skills", skillsScreen(state)];
     }
+    if (ui.outro) {
+      return ["combat", combatScreen(ui.outro.state, { outro: ui.outro.outcome })];
+    }
     if (state.flags.victoryPending) {
       return ["victory", victoryScreen(state)];
     }
@@ -299,24 +363,65 @@ export function createApp({ doc = document, bus, storage }) {
     return [`floor-${state.player.floor}`, floorScreen(state, ui)];
   }
 
+  function tweenGold(target) {
+    win.cancelAnimationFrame(goldFrame);
+    const from = goldShown;
+    const start = now();
+    const tick = () => {
+      const node = els.status.querySelector("[data-gold]");
+      const progress = Math.min(1, (now() - start) / FX.goldMs);
+      goldShown = Math.round(from + (target - from) * (1 - (1 - progress) ** 3));
+      if (node) {
+        node.textContent = num(goldShown);
+      }
+      if (progress < 1 && node) {
+        goldFrame = win.requestAnimationFrame(tick);
+      } else {
+        goldShown = target;
+      }
+    };
+    tick();
+  }
+
   function renderStatus(state) {
     if (!state) {
-      els.status.innerHTML = `<span class="badge">Sin partida en curso</span>`;
+      statusHtml = `<span class="badge">Sin partida en curso</span>`;
+      els.status.innerHTML = statusHtml;
       return;
     }
     const { player, inventory } = state;
     const health = percent(player.hp, player.maxHp);
     const need = xpToNext(player.level);
-    els.status.innerHTML =
+    const html =
       `<span class="badge">${player.floor > 0 ? `Piso ${player.floor}` : "Rubi"}</span>` +
-      `<span class="badge">Nivel ${player.level}</span>` +
+      `<span class="badge" data-level>Nivel ${player.level}</span>` +
       `<span class="badge badge--hp${health <= 30 ? " badge--low" : ""}">Salud ${health}%</span>` +
       `<span class="badge badge--energy">Energía ${player.energy}/${BALANCE.maxEnergy}</span>` +
-      `<span class="badge badge--gold">Oro ${num(inventory.gold)}</span>` +
+      `<span class="badge badge--gold">Oro <span data-gold>${num(inventory.gold)}</span></span>` +
       `<div class="status__meters">` +
       meter("status-hp", player.hp, player.maxHp, "hp", `Salud ${player.hp} de ${player.maxHp}`) +
       meter("status-xp", player.xp, need, "xp", `Experiencia ${player.xp} de ${need}`) +
       `</div>`;
+    // Si nada cambia no se repinta, para no cortar las animaciones en curso.
+    if (html === statusHtml) {
+      return;
+    }
+    statusHtml = html;
+    els.status.innerHTML = html;
+
+    const seen = statusSeen;
+    statusSeen = { level: player.level };
+    if (seen && player.level > seen.level) {
+      els.status.querySelector("[data-level]").classList.add("badge--levelup");
+    }
+    if (goldShown === null || !motionOk()) {
+      goldShown = inventory.gold;
+    } else if (goldShown !== inventory.gold) {
+      if (inventory.gold > goldShown) {
+        els.status.querySelector(".badge--gold").classList.add("badge--bump");
+      }
+      tweenGold(inventory.gold);
+    }
   }
 
   function renderTabs(state) {
@@ -340,11 +445,18 @@ export function createApp({ doc = document, bus, storage }) {
       els.log.innerHTML = "<li>El castillo aguarda...</li>";
       return;
     }
-    els.log.innerHTML = state.log
-      .map((entry) => {
+    const { log } = state;
+    // Las entradas solo se añaden por delante: si la primera no cambia, no hay nada nuevo.
+    if (logSeen && logSeen === log[0]) {
+      return;
+    }
+    const fresh = logSeen ? Math.max(0, log.indexOf(logSeen)) : 0;
+    logSeen = log[0];
+    els.log.innerHTML = log
+      .map((entry, index) => {
         const text = typeof entry === "string" ? entry : entry.text;
         const kind = typeof entry === "string" ? "info" : entry.kind;
-        return `<li class="log__item log__item--${esc(kind)}">${esc(text)}</li>`;
+        return `<li class="log__item log__item--${esc(kind)}${index < fresh ? " log__item--new" : ""}">${esc(text)}</li>`;
       })
       .join("");
   }
@@ -367,7 +479,7 @@ export function createApp({ doc = document, bus, storage }) {
   }
 
   // Las barras arrancan en su valor anterior y transicionan al nuevo.
-  function animateMeters() {
+  function animateMeters(delays = {}) {
     const next = new Map();
     for (const fill of doc.querySelectorAll("[data-meter]")) {
       const id = fill.dataset.meter;
@@ -376,6 +488,7 @@ export function createApp({ doc = document, bus, storage }) {
       if (previous !== undefined && previous !== value) {
         fill.style.width = `${previous}%`;
         void fill.offsetWidth;
+        fill.style.transitionDelay = delays[id] ? `${delays[id]}ms` : "";
         fill.style.width = `${value}%`;
       }
       next.set(id, value);
@@ -383,18 +496,126 @@ export function createApp({ doc = document, bus, storage }) {
     meterValues = next;
   }
 
-  function flashDamage() {
-    const next = new Map();
-    for (const node of els.screen.querySelectorAll("[data-hp]")) {
-      const id = node.dataset.enemy ?? "you";
-      const hp = Number(node.dataset.hp);
-      const previous = hpValues.get(id);
-      if (previous !== undefined && hp < previous) {
-        node.classList.add("is-hit");
-      }
-      next.set(id, hp);
+  function floatText(card, text, kind, at) {
+    if (!card) {
+      return;
     }
-    hpValues = next;
+    const node = doc.createElement("span");
+    node.className = `float float--${kind}`;
+    node.textContent = text;
+    node.setAttribute("aria-hidden", "true");
+    node.style.animationDelay = `${at}ms`;
+    node.style.setProperty("--x", `${card.querySelectorAll(".float").length * 22}px`);
+    node.addEventListener("animationend", () => node.remove());
+    card.append(node);
+  }
+
+  // Números flotantes, sacudidas y caídas de la ronda que se acaba de resolver.
+  function playRound(events, times) {
+    const lines = [...els.screen.querySelectorAll(".feed__item")];
+    const you = els.screen.querySelector(".you");
+    const hero = you?.querySelector(".sprite");
+    const enemyCard = (index) => els.screen.querySelector(`[data-enemy="${index}"]`);
+    let lastHurt = 0;
+
+    events.forEach((event, index) => {
+      const at = times[index];
+      if (lines[index]) {
+        lines[index].classList.add("feed__item--new");
+        lines[index].style.animationDelay = `${at}ms`;
+      }
+      if (typeof event.target === "number") {
+        const card = enemyCard(event.target);
+        const sprite = card?.querySelector(".sprite");
+        floatText(card, `−${num(event.amount)}`, event.crit ? "crit" : "dmg", at);
+        card?.animate(SHAKE, { duration: event.crit ? 380 : 260, delay: at });
+        hero?.animate([{ transform: "none" }, { transform: "translateY(-5px)" }, { transform: "none" }], {
+          duration: 200,
+          delay: at,
+        });
+        if (event.kill) {
+          card?.animate([{ opacity: 1 }, { opacity: 1, offset: 0.5 }, { opacity: 0.45 }], {
+            duration: 520,
+            delay: at,
+            fill: "backwards",
+          });
+          sprite?.animate(
+            [
+              { transform: "none", filter: "none" },
+              { transform: "none", filter: "brightness(4)", offset: 0.3 },
+              { transform: FALLEN, filter: "grayscale(1)" },
+            ],
+            { duration: 520, delay: at, fill: "backwards", easing: "ease-in" }
+          );
+        }
+      } else if (event.target === "you" && event.source !== undefined) {
+        lastHurt = at;
+        floatText(you, `−${num(event.amount)}`, event.blast ? "crit" : "hurt", at);
+        you?.animate(SHAKE, { duration: event.blast ? 420 : 260, delay: at });
+        enemyCard(event.source)
+          ?.querySelector(".sprite")
+          ?.animate([{ transform: "none" }, { transform: "translateY(6px)" }, { transform: "none" }], {
+            duration: 220,
+            delay: at,
+          });
+      } else if (event.target === "you") {
+        floatText(you, `+${num(event.amount)}`, "heal", at);
+      } else if (event.tone === "miss") {
+        floatText(enemyCard(event.source), "falla", "miss", at);
+      }
+    });
+
+    if (you?.classList.contains("you--down")) {
+      hero?.animate(
+        [
+          { transform: "none", filter: "none" },
+          { transform: FALLEN, filter: "grayscale(1)" },
+        ],
+        { duration: 380, delay: lastHurt, fill: "backwards", easing: "ease-in" }
+      );
+    }
+  }
+
+  // --- Enfriamientos ---
+
+  function applyCooldowns() {
+    const at = now();
+    for (const node of els.screen.querySelectorAll("button[data-action]")) {
+      const cooling = node.disabled ? null : cooldowns.get(node.dataset, at);
+      if (cooling) {
+        node.classList.add("is-cooling");
+        node.classList.remove("is-ready");
+        node.setAttribute("aria-disabled", "true");
+        node.style.setProperty("--cd-total", `${Math.round(cooling.total)}ms`);
+        node.style.setProperty("--cd-elapsed", `${-Math.round(cooling.elapsed)}ms`);
+      } else if (node.classList.contains("is-cooling")) {
+        node.classList.remove("is-cooling");
+        node.classList.add("is-ready");
+        node.removeAttribute("aria-disabled");
+      }
+    }
+    win.clearTimeout(cooldownTimer);
+    const wait = cooldowns.next(at);
+    if (wait !== null) {
+      cooldownTimer = win.setTimeout(applyCooldowns, wait + 4);
+    }
+  }
+
+  function startOutro(round) {
+    const base = shownState || getState();
+    ui.outro = {
+      outcome: round.outcome,
+      state: {
+        ...base,
+        combat: { ...round.combat, round: round.combat.round - 1 },
+        player: { ...base.player, hp: round.hp, energy: round.energy },
+      },
+    };
+    win.clearTimeout(outroTimer);
+    outroTimer = win.setTimeout(() => {
+      ui.outro = null;
+      scheduleRender();
+    }, COOLDOWN.outro);
   }
 
   function labelHotkeys() {
@@ -426,19 +647,45 @@ export function createApp({ doc = document, bus, storage }) {
     }
     const [name, html] = pickScreen(state);
     const focused = els.screen.contains(doc.activeElement) ? focusKey(doc.activeElement) : null;
+    const entering = name !== lastScreen;
+    const nav = `${ui.tab}|${ui.view}`;
+    const outro = name === "combat" ? ui.outro : null;
+    const round = name === "combat" ? ui.fx : null;
+    const times = round ? planRound(round) : [];
+    const hurtAt = round ? times.find((at, index) => round[index].target === "you" && round[index].source !== undefined) : 0;
+    ui.fx = null;
 
-    renderStatus(state);
+    // Durante el desenlace la barra de estado sigue mostrando el combate.
+    renderStatus(outro ? outro.state : state);
     renderTabs(state);
-    renderLog(state);
+    renderLog(outro ? outro.state : state);
     els.screen.innerHTML = html;
     els.screen.dataset.screen = name.replace(/-\d+$/, "");
     els.app.dataset.screen = els.screen.dataset.screen;
+    els.screen.classList.toggle("is-entering", entering);
+    if (outro) {
+      els.screen.dataset.outro = outro.outcome;
+    } else {
+      delete els.screen.dataset.outro;
+    }
     labelHotkeys();
-    animateMeters();
-    flashDamage();
+    animateMeters(hurtAt && motionOk() ? { "player-hp": hurtAt, "status-hp": hurtAt } : {});
+    if (round && motionOk()) {
+      playRound(round, times);
+    }
+    // Al llegar a una pantalla por una acción del juego (no al cambiar de
+    // pestaña) sus botones empiezan enfriándose: evita encadenar pulsaciones.
+    if (entering && state && nav === lastNav) {
+      for (const node of els.screen.querySelectorAll("button[data-action]")) {
+        cooldowns.arrive(node.dataset);
+      }
+    }
+    lastNav = nav;
+    shownState = state;
+    applyCooldowns();
     renderModal();
 
-    if (name !== lastScreen) {
+    if (entering) {
       lastScreen = name;
       if (els.screen.getBoundingClientRect().top < 0) {
         els.screen.scrollIntoView({ block: "start" });
@@ -475,8 +722,11 @@ export function createApp({ doc = document, bus, storage }) {
   bus.on("combat:lost", () => {
     Object.assign(ui, { tab: "explore", view: "", notice: null });
   });
-  bus.on("player:levelup", ({ level, points }) => {
-    toast(`¡Nivel ${level}!${points > 0 ? " Tienes puntos de habilidad por gastar." : ""}`, "good");
+  bus.on("combat:round", (round) => {
+    ui.fx = round.events;
+    if (round.outcome === "victory" || round.outcome === "defeat") {
+      startOutro(round);
+    }
   });
 
   doc.addEventListener("click", (event) => {
@@ -488,7 +738,7 @@ export function createApp({ doc = document, bus, storage }) {
       return;
     }
     const node = event.target.closest("[data-action]");
-    if (!node || node.disabled) {
+    if (!node || node.disabled || node.getAttribute("aria-disabled") === "true" || node.closest("[inert]")) {
       return;
     }
     const handler = actions[node.dataset.action];
@@ -529,7 +779,7 @@ export function createApp({ doc = document, bus, storage }) {
     els.app.classList.add("app--keys");
     if (/^[1-9]$/.test(event.key)) {
       const target = hotkeyButtons()[Number(event.key) - 1];
-      if (target && !target.disabled) {
+      if (target && !target.disabled && !ui.outro) {
         event.preventDefault();
         target.click();
       }
