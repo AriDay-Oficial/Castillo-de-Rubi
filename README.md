@@ -24,6 +24,30 @@ La partida se guarda sola en el navegador (`localStorage`) después de cada acci
 
 En escritorio, las teclas `1`–`9` activan las acciones principales de la pantalla.
 
+### Enfriamientos
+
+Cada botón de acción tiene un tiempo de enfriamiento propio: al pulsarlo se atenúa y un velo se retira de izquierda a derecha hasta que vuelve a estar listo. Marca el ritmo de la partida y evita encadenar pulsaciones por error; las teclas `1`–`9` lo respetan igual que los clics. La navegación (pestañas, abrir la tienda o la herrería, ajustes) no espera nunca.
+
+| Acción | Enfriamiento |
+| --- | --- |
+| Atacar, Defender | 0,6 s |
+| Técnicas | 1 s + 0,5 s por punto de energía (1,5 s a 2,5 s) |
+| Poción en combate | 1,2 s |
+| Huir | 1,5 s |
+| Explorar, subir de piso | 0,8 s |
+| Desafiar al jefe, volver a Rubi | 1,5 s |
+| Entrar al castillo | 1 s |
+| Descansar (posada, hoguera), rezar | 2 s |
+| Usar un objeto, forjar o mejorar | 0,8 s |
+| Aprender una habilidad | 0,4 s |
+| Comprar, vender, equipar, quitar | 0,3 s |
+
+Además, tras cualquier acción de combate todos los botones del combate esperan 0,45 s (el tiempo de ver el intercambio de golpes), y al llegar a una pantalla nueva sus acciones empiezan enfriándose, como mucho 1 s. El último golpe de un combate se sigue viendo 0,6 s antes de pasar al resultado. Los tiempos están en `COOLDOWN` (`src/ui/cooldowns.js`); son solo ritmo de interfaz y no cambian las reglas ni el guardado.
+
+### Sprites y animaciones
+
+Los enemigos (una silueta por familia, con colores propios para cada uno), los cinco jefes, tu personaje y los objetos tienen un pequeño sprite de píxeles dibujado como SVG en línea: no hay imágenes que descargar. En combate verás números flotantes de daño y curación, sacudidas al recibir un golpe, la caída de los derrotados y el aviso parpadeante del golpe devastador. Subir de nivel, vencer a un jefe y ganar oro también se celebran. Con la opción del sistema «reducir movimiento» activada, las animaciones se suprimen y los enfriamientos se muestran solo atenuando el botón.
+
 ## Ejecutarlo en local
 
 Los módulos ES no cargan desde `file://`, así que hace falta un servidor estático cualquiera:
@@ -37,7 +61,7 @@ Después abre <http://localhost:8000/>.
 
 ## Pruebas
 
-La lógica pura (generación, reglas, combate, estado, guardado y partidas completas simuladas) se prueba con el runner nativo de Node 20 o superior, sin instalar nada:
+La lógica pura (generación, reglas, combate, estado, guardado y partidas completas simuladas), los enfriamientos y los sprites se prueban con el runner nativo de Node 20 o superior, sin instalar nada:
 
 ```bash
 npm test
@@ -55,6 +79,8 @@ src/procgen/          Generación con semilla de pisos y encuentros
 src/core/             Estado, motor de reductores, bus de eventos y guardado
 src/game/             Reglas, combate, objetos, habilidades y controlador de la partida
 src/ui/               Pantallas (HTML) y controlador de la interfaz
+src/ui/sprites.js     Sprites de píxeles (rejillas de texto convertidas a SVG)
+src/ui/cooldowns.js   Tiempos y registro de enfriamiento de los botones
 tests/                Pruebas con node:test
 ```
 
