@@ -23,6 +23,11 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Evita que la página se desplace de lado cuando aparece la barra de scroll. */
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
@@ -974,6 +979,10 @@ kbd {
   50% {
     background: rgba(213, 75, 75, 0.5);
   }
+}
+
+.app--keys kbd {
+  display: inline-block;
 }
 
 @media (hover: hover) and (pointer: fine) {

@@ -525,6 +525,8 @@ export function createApp({ doc = document, bus, storage }) {
     if (event.target.closest("input, textarea, select")) {
       return;
     }
+    // Hay teclado: enseña los números de atajo aunque el navegador no declare un ratón.
+    els.app.classList.add("app--keys");
     if (/^[1-9]$/.test(event.key)) {
       const target = hotkeyButtons()[Number(event.key) - 1];
       if (target && !target.disabled) {
