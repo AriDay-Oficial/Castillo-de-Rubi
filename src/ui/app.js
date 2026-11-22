@@ -26,6 +26,7 @@ const ANNOUNCED = new Set(["rest", "pray", "buy", "sell", "forge", "equip", "une
 
 export function createApp({ doc = document, bus, storage }) {
   const els = {
+    app: doc.getElementById("app"),
     screen: doc.getElementById("screen"),
     status: doc.getElementById("statusBar"),
     log: doc.getElementById("logList"),
@@ -61,7 +62,7 @@ export function createApp({ doc = document, bus, storage }) {
     item.className = `toast toast--${tone}`;
     item.textContent = text;
     els.toasts.append(item);
-    while (els.toasts.children.length > 3) {
+    while (els.toasts.children.length > 2) {
       els.toasts.firstElementChild.remove();
     }
     setTimeout(() => item.remove(), TOAST_MS);
@@ -305,7 +306,7 @@ export function createApp({ doc = document, bus, storage }) {
     const health = percent(player.hp, player.maxHp);
     const need = xpToNext(player.level);
     els.status.innerHTML =
-      `<span class="badge">${player.floor > 0 ? `Piso ${player.floor}` : "Piso 0 · Rubi"}</span>` +
+      `<span class="badge">${player.floor > 0 ? `Piso ${player.floor}` : "Rubi"}</span>` +
       `<span class="badge">Nivel ${player.level}</span>` +
       `<span class="badge badge--hp${health <= 30 ? " badge--low" : ""}">Salud ${health}%</span>` +
       `<span class="badge badge--energy">Energía ${player.energy}/${BALANCE.maxEnergy}</span>` +
@@ -429,6 +430,7 @@ export function createApp({ doc = document, bus, storage }) {
     renderLog(state);
     els.screen.innerHTML = html;
     els.screen.dataset.screen = name.replace(/-\d+$/, "");
+    els.app.dataset.screen = els.screen.dataset.screen;
     labelHotkeys();
     animateMeters();
     flashDamage();
@@ -471,8 +473,8 @@ export function createApp({ doc = document, bus, storage }) {
   bus.on("combat:lost", () => {
     Object.assign(ui, { tab: "explore", view: "", notice: null });
   });
-  bus.on("player:levelup", ({ level }) => {
-    toast(`¡Nivel ${level}! Tienes puntos de habilidad por gastar.`, "good");
+  bus.on("player:levelup", ({ level, points }) => {
+    toast(`¡Nivel ${level}!${points > 0 ? " Tienes puntos de habilidad por gastar." : ""}`, "good");
   });
 
   doc.addEventListener("click", (event) => {

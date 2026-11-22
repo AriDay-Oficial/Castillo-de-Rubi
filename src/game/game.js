@@ -19,7 +19,7 @@ import {
   healAmount,
   isInCity,
 } from "./selectors.js";
-import { getRank, getSkill, SKILL_MAX_RANK } from "./skills.js";
+import { getRank, getSkill, openRanks, SKILL_MAX_RANK } from "./skills.js";
 
 const fail = (reason) => ({ ok: false, reason });
 const OK = Object.freeze({ ok: true });
@@ -105,21 +105,22 @@ export function createGame({ engine, bus, rng = Math.random }) {
       return 0;
     }
     const { maxHp } = baseStats(level);
+    // Con todas las habilidades dominadas, los puntos de más no servirían de nada.
+    const points = Math.min(levels, Math.max(0, openRanks(get().skills) - skillPoints));
     apply("updatePlayer", {
       xp,
       level,
       maxHp,
       hp: maxHp,
       energy: BALANCE.maxEnergy,
-      skillPoints: skillPoints + levels,
+      skillPoints: skillPoints + points,
     });
     say(
-      `¡Subes al nivel ${level}! Salud y energía restauradas, +${levels} ${
-        levels === 1 ? "punto" : "puntos"
-      } de habilidad.`,
+      `¡Subes al nivel ${level}! Salud y energía restauradas` +
+        (points > 0 ? `, +${points} ${points === 1 ? "punto" : "puntos"} de habilidad.` : "."),
       "good"
     );
-    bus.emit("player:levelup", { level, levels });
+    bus.emit("player:levelup", { level, levels, points });
     return levels;
   }
 

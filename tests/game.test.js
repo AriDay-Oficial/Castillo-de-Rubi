@@ -294,6 +294,26 @@ test("las habilidades cuestan un punto y tienen rango máximo", () => {
   assert.equal(engine.getState().skills.craft.alquimia, 1);
 });
 
+test("con todas las habilidades al máximo ya no se reparten puntos", () => {
+  const state = createNewGame({ seed: "maestro" });
+  state.player = { ...state.player, level: 30, maxHp: 680, hp: 680, skillPoints: 1, xp: 0 };
+  state.skills = {
+    weapons: { golpe: 5, barrido: 5, aliento: 5, maestria: 5, guardia: 5 },
+    craft: { alquimia: 5, forja: 5, comercio: 4 },
+  };
+  const session = createSession({ state, rngSeed: "maestro" });
+  const { engine, game } = session;
+  engine.apply("updatePlayer", { xp: 939 });
+  game.enterCastle("entrada");
+  game.explore();
+  winFight(session);
+
+  assert.equal(engine.getState().player.level, 31);
+  assert.equal(engine.getState().player.skillPoints, 1, "solo queda un rango por aprender");
+  assert.ok(game.learnSkill("comercio").ok);
+  assert.equal(game.learnSkill("comercio").ok, false);
+});
+
 test("una partida guardada en mitad de un combate se puede continuar", () => {
   const data = new Map();
   const storage = createStorage({

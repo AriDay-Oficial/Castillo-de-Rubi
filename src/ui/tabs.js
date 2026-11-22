@@ -1,7 +1,7 @@
 import { describeItem, entryKey, getItem, itemLabel, MAX_GEAR_LEVEL, RARITY_NAMES, SLOTS } from "../game/items.js";
 import { BALANCE, getPlayerStats, xpToNext } from "../game/rules.js";
 import { getFloorStatus, isInCity } from "../game/selectors.js";
-import { getRank, SKILL_GROUPS, SKILL_MAX_RANK, SKILLS } from "../game/skills.js";
+import { getRank, openRanks, SKILL_GROUPS, SKILL_MAX_RANK, SKILLS } from "../game/skills.js";
 import { button, esc, meter, num, timeAgo } from "./html.js";
 
 export function inventoryScreen(state) {
@@ -120,7 +120,9 @@ export function skillsScreen(state) {
     `<li><span>Crítico</span><strong>${Math.round(stats.critChance * 100)} %</strong></li>` +
     `<li><span>Energía</span><strong>${player.energy}/${BALANCE.maxEnergy}</strong></li>` +
     `</ul>` +
-    `<p class="points${player.skillPoints > 0 ? " points--on" : ""}">Puntos de habilidad disponibles: <strong>${player.skillPoints}</strong>. Ganas uno por nivel.</p>` +
+    (openRanks(skills) > 0
+      ? `<p class="points${player.skillPoints > 0 ? " points--on" : ""}">Puntos de habilidad disponibles: <strong>${player.skillPoints}</strong>. Ganas uno por nivel.</p>`
+      : `<p class="points">Dominas todas las habilidades.</p>`) +
     groups
   );
 }

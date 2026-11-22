@@ -404,7 +404,11 @@ function enemyHtml(enemy, index, isTarget) {
     (isTarget ? `<span class="chip chip--target">Objetivo</span>` : "") +
     `</div>` +
     meter(`enemy-${index}`, enemy.hp, enemy.maxHp, "enemy", `Salud de ${enemy.name}`) +
-    `<small>${dead ? "Derrotado" : `Salud ${num(enemy.hp)}/${num(enemy.maxHp)} · Ataque ${num(enemy.attack)}`}</small>` +
+    `<small>${
+      dead
+        ? "Derrotado"
+        : `<span class="enemy__word">Salud </span>${num(enemy.hp)}/${num(enemy.maxHp)} · Ataque ${num(enemy.attack)}`
+    }</small>` +
     `</li>`
   );
 }
@@ -426,7 +430,7 @@ export function combatScreen(state) {
           : `${Math.round(effect.multiplier * 100)} % de daño${skill.id === "barrido" ? " a todos" : ""}`;
       return button(skill.name, "act", {
         data: { type: "skill", id: skill.id },
-        note: `${note} · ${skill.cost} de energía`,
+        note: `${note} · coste ${skill.cost}`,
         disabled: player.energy < skill.cost || (skill.id === "aliento" && player.hp >= player.maxHp),
         variant: "skill",
       });

@@ -94,6 +94,11 @@ export function getRank(skills, id) {
   return Number.isInteger(rank) ? Math.min(SKILL_MAX_RANK, Math.max(0, rank)) : 0;
 }
 
+/** Rangos que aún quedan por aprender entre todas las habilidades. */
+export function openRanks(skills) {
+  return SKILLS.reduce((total, skill) => total + SKILL_MAX_RANK - getRank(skills, skill.id), 0);
+}
+
 export function getEffect(skills, id) {
   return getSkill(id).effect(getRank(skills, id));
 }
